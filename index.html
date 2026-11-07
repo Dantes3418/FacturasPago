@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#6D3FD1"><link rel="apple-touch-icon" href="entel.png">
+<title>Pagos Entel</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=2"></head><body>
+
+<div id="login" class="login"><div class="login-box">
+  <img src="entel.png" class="logo" alt="Entel"><h2>Pagos de clientes</h2><p class="muted">Seguimiento y cobranza</p>
+  <input type="password" id="pass" placeholder="Contraseña" autocomplete="off">
+  <button class="btn big" id="b-login">Ingresar</button><div id="l-err" class="err"></div>
+</div></div>
+
+<div id="app" hidden>
+<header>
+  <div class="top"><img src="entel.png" alt=""><div class="tt"><b>Pagos Entel</b><small id="h-sync"></small></div>
+    <button class="ico" id="b-sync" aria-label="Actualizar">⟳</button><button class="ico" id="b-menu" aria-label="Menú">⋯</button></div>
+  <nav id="months" aria-label="Mes"></nav>
+</header>
+<main>
+  <section id="stats"></section>
+  <details id="msgs" class="msgs">
+    <summary>💬 Mensajes para copiar</summary>
+    <div id="msg-list"></div>
+  </details>
+  <div class="sr"><input id="q" type="search" placeholder="Buscar nombre, celular, cuenta, referencia o #número" autocomplete="off"></div>
+  <div id="chips" class="chips"></div>
+  <div id="count" class="muted"></div>
+  <div id="cards"></div>
+  <button class="btn ghost big" id="more" hidden>Mostrar más</button>
+</main>
+</div>
+
+<div id="back" hidden></div>
+<div id="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div id="sh-body"></div></div>
+<div id="toast"></div>
+<script src="app.js?v=2"></script>
+</body></html>
