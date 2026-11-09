@@ -1,10 +1,47 @@
 // ===== CONFIGURACIÓN =====
-const API = 'https://script.google.com/macros/s/AKfycbycwvYRz6d_IIEMmVUVzjHHWAVzW_LcL4JdKrHPOX7imyVb9vaprx0K69UPX4HbTFoiQw/exec';
+const API = 'https://script.google.com/macros/s/AKfycbzZbIS-MSlyhbYFITpa1rdPRalNq_JYNE2C_Szx77Y46YYp5FWxyzfA1sb69GKqCSISZQ/exec';
 const MESES = ['OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE', 'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE'];
 const CAL = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 const IDLE_MIN = 20; // minutos de inactividad antes de volver a pedir la contraseña
 const PORTAL = 'https://tienda.nube.entel.bo/facturas';
-const MSG = (n, c) => `Nombre del cliente: ${n}\n\nNúmero de cuenta: ${c}\n\nCon su número de cuenta podrá realizar el pago de su mensualidad mediante cualquier aplicación bancaria o directamente en una entidad financiera.\n\nTambién puede realizar el pago mediante nuestro portal:\n${PORTAL}\n\nSi necesita ayuda con el pago o la generación de un código QR, estaré a su disposición para brindarle asistencia.`;
+
+const MSG = (n, c, obs) => {
+  const partes = String(obs || '').split('|').map(x => x.trim());
+
+  // Extraer el monto total de la observación
+  const total = partes[0]
+    .replace(/^MORA TOTAL:\s*/i, '')
+    .replace(/^SIN MORA.*$/i, 'Bs0,00');
+
+  // Extraer el detalle de las facturas por mes
+  const detalle = partes.slice(1)
+    .filter(x => x)
+    .map(x => x.replace(/^([A-Z]{3}):\s*/, '$1. -- '))
+    .join('\n');
+
+  return `Estimado/a cliente:
+
+Le saludamos cordialmente de Entel 😄
+
+Le informamos que su cuenta presenta facturas pendientes de pago.
+
+ Nombre del cliente: ${n}
+
+ Número de cuenta: ${c}
+
+ Monto total factura: ${total}${detalle ? '\n\n Detalle de facturas pendientes:\n' + detalle : ''}
+
+Puede realizar su pago mediante cualquier aplicación bancaria, en una entidad financiera o a través de nuestro portal:
+
+${PORTAL}
+
+Si ya realizó su pago, puede ignorar este mensaje.
+
+Si necesita ayuda con el pago o la generación de un código QR, estaremos a su disposición para brindarle asistencia.
+
+¡Muchas gracias por su atención! 😃`;
+};
+
 const QUICK = ['No contesta', 'Promete pagar', 'Pagó, falta registrar'];
 
 // Mensajes listos para copiar (m = nombre del mes en minúsculas)
@@ -172,7 +209,7 @@ async function copyCuenta(numero, boton) {
 function waBtn(n, d, sm) {
   const c = 'act wa' + (sm ? ' sm' : '');
   if (!n) return `<span class="${c} off"><img src="whatsapp.png" alt="">WhatsApp</span>`;
-  return `<a class="${c}" target="_blank" rel="noopener" href="https://wa.me/591${n}?text=${encodeURIComponent(MSG(d.nombre, d.cuenta))}"><img src="whatsapp.png" alt="">WhatsApp</a>`;
+  return `<a class="${c}" target="_blank" rel="noopener" href="https://wa.me/591${n}?text=${encodeURIComponent(MSG(d.nombre, d.cuenta, d.obs))}"><img src="whatsapp.png" alt="">WhatsApp</a>`;
 }
 function telBtn(n, sm) {
   const c = 'act tel' + (sm ? ' sm' : '');
@@ -257,8 +294,39 @@ async function histDialog(nombre) {
     $('sh-body').innerHTML = `<h3>${nombre ? 'Historial · ' + esc(nombre) : 'Historial de cambios'}</h3>` + (a.map(h => `<div class="hi"><b>${esc(h.campo)}: ${esc(h.antes) || '—'} → ${esc(h.despues) || '—'}</b><span>${esc(h.t)} · ${esc(h.mes)}${nombre ? '' : ' · ' + esc(h.nombre)}</span></div>`).join('') || '<p class="muted">Aún no hay cambios registrados.</p>') + '<button class="btn ghost big" data-a="x">Cerrar</button>';
   } catch (e) { $('sh-body').innerHTML = `<h3>Historial</h3><p class="err">${esc(e.message)}</p><button class="btn ghost big" data-a="x">Cerrar</button>`; }
 }
+// ===== MOROSIDAD (consulta automática: el userscript trae los datos de Entel; aquí se revisan y se aplican) =====
+let MORA_ID = null;
+async function moraDialog() {
+  sheet(`<h3>Consultar morosidad</h3><p class="muted">Buscando resultados…</p>`);
+  try {
+    const r = await api({ action: 'moraplan' }, 60000); if (!r.ok) throw new Error(r.error);
+    if (r.vacio) {
+      MORA_ID = null;
+      $('sh-body').innerHTML = `<h3>Consultar morosidad</h3><p class="muted">No hay resultados pendientes de revisar.</p>
+        <p class="muted">1) Abre <a href="${PORTAL}" target="_blank" rel="noopener">el portal de Entel</a> (con el script instalado).<br>2) Haz una consulta manual de cualquier cuenta.<br>3) En el panel morado elige la hoja y pulsa «Probar 3» y luego «Consultar todas».<br>4) Vuelve aquí para revisar y aplicar.</p>
+        <button class="btn ghost big" data-a="x">Cerrar</button>`;
+      return;
+    }
+    MORA_ID = r.id; const c = r.cont, min = Math.max(0, Math.round((Date.now() - r.t) / 60000));
+    const lista = r.items.map(i => `<div class="hi"><b>${esc(i.nombre)} · Cta ${esc(i.cuenta)}</b>${i.cambios.map(x => `<span>${esc(x.campo)}: ${esc(x.de) || '—'} → ${esc(x.a)}</span><br>`).join('')}</div>`).join('');
+    const fall = r.fallidos.length ? `<p class="err">Fallidas (no se modifican): ${r.fallidos.map(f => esc(f.nombre) + ' (' + esc(f.e) + ')').join(', ')}</p>` : '';
+    $('sh-body').innerHTML = `<h3>Vista previa · ${esc(r.mes)}</h3><p class="muted">Consultado hace ${min} min. Aún no se ha cambiado nada en la hoja.</p>
+      <p><b>${c.consultados}</b> consultados · <b>${c.mora}</b> con mora · <b>${c.sin}</b> sin mora · <b>${c.err}</b> fallidas${c.omitidos ? ' · ' + c.omitidos + ' omitidos' : ''}</p>${fall}
+      <div style="max-height:42vh;overflow:auto">${lista || '<p class="muted">No hay cambios por aplicar.</p>'}</div>${r.recortado ? '<p class="muted">Se muestran los primeros 400 clientes; se aplicarán todos.</p>' : ''}
+      ${c.cambios ? `<button class="btn big" data-a="moraok">Aplicar cambios (${c.cambios} clientes)</button>` : ''}<button class="btn ghost big" data-a="x">Cancelar</button>`;
+  } catch (e) { $('sh-body').innerHTML = `<h3>Consultar morosidad</h3><p class="err">${esc(e.message)}</p><button class="btn ghost big" data-a="x">Cerrar</button>`; }
+}
+async function moraAplicar() {
+  if (!MORA_ID) return;
+  const id = MORA_ID, b = document.querySelector('#sh-body [data-a="moraok"]'); if (b) { b.disabled = true; b.textContent = 'Aplicando…'; }
+  try {
+    const r = await api({ action: 'moraaplicar', id }, 120000); if (!r.ok) throw new Error(r.error);
+    MORA_ID = null; closeSheet(); toast(`Morosidad aplicada: ${r.clientes} clientes, ${r.celdas} celdas`);
+    if (r.mes !== mes) setMes(r.mes); else load();
+  } catch (e) { toast(e.message, true); if (b) { b.disabled = false; b.textContent = 'Reintentar'; } }
+}
 function menu() {
-  sheet(`<h3>Opciones</h3><button class="mi" data-a="csv">⬇ Exportar ${view().length} clientes filtrados (CSV)</button><button class="mi" data-a="hist0">🕘 Historial de cambios</button><button class="mi" data-a="out">⎋ Cerrar sesión</button><button class="btn ghost big" data-a="x">Cerrar</button>`);
+  sheet(`<h3>Opciones</h3><button class="mi" data-a="csv">⬇ Exportar ${view().length} clientes filtrados (CSV)</button><button class="mi" data-a="mora">📡 Consultar morosidad</button><button class="mi" data-a="hist0">🕘 Historial de cambios</button><button class="mi" data-a="out">⎋ Cerrar sesión</button><button class="btn ghost big" data-a="x">Cerrar</button>`);
 }
 function exportCsv() {
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -341,6 +409,8 @@ $('sheet').onclick = e => {
   else if (b.dataset.a === 'x') closeSheet();
   else if (b.dataset.a === 'csv') exportCsv();
   else if (b.dataset.a === 'hist0') histDialog();
+  else if (b.dataset.a === 'mora') moraDialog();
+  else if (b.dataset.a === 'moraok') moraAplicar();
   else if (b.dataset.a === 'out') logout();
 };
 
