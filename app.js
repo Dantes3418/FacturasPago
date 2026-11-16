@@ -23,13 +23,11 @@ const MSG = (n, c, obs) => {
 
 Le saludamos cordialmente de Entel 😄
 
-Le informamos que su cuenta presenta facturas pendientes de pago.
-
  Nombre del cliente: ${n}
 
  Número de cuenta: ${c}
 
- Monto total factura: ${total}${detalle ? '\n\n Detalle de facturas pendientes:\n' + detalle : ''}
+ Monto total factura: *${total}*${detalle ? '\n\n Detalle de facturas pendientes:\n' + detalle : ''}
 
 Puede realizar su pago mediante cualquier aplicación bancaria, en una entidad financiera o a través de nuestro portal:
 
